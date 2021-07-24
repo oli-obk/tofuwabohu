@@ -1,0 +1,24 @@
+# in .github/workflows/continuous_deployment.yml
+name: Continuous deployment for android
+on:
+  workflow_run:
+    branches: [main]
+    workflows: [Continuous deployment]
+    types: [completed]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - run: docker run --rm -v $(pwd)":/root/src" -w /root/src notfl3/cargo-apk sh android.sh
+      - run: mkdir dist
+      - run: cp target/android-artifacts/release/apk/tofuwabohu.apk dist/tofuwabohu.apk
+
+      - uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          keep_files: true
