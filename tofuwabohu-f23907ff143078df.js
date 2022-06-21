@@ -66,7 +66,7 @@ function initSync(bytes) {
 
 async function init(input) {
     if (typeof input === 'undefined') {
-        input = new URL('tofuwabohu-df60abd56cb909ba_bg.wasm', import.meta.url);
+        input = new URL('tofuwabohu-f23907ff143078df_bg.wasm', import.meta.url);
     }
     const imports = getImports();
 
