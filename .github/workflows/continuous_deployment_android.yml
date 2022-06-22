@@ -30,4 +30,4 @@ jobs:
           CHANNEL: android
           ITCH_GAME: tofuwabohu
           ITCH_USER: oli-obk
-          PACKAGE: dist
+          PACKAGE: dist/tofuwabohu.apk
