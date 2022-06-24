@@ -1,5 +1,5 @@
 let
-  pkgs = import <nixpkgs> {}; 
+  pkgs = import <nixpkgs> {};
 in
 pkgs.mkShell rec {
   name = "rustc";
@@ -13,5 +13,6 @@ pkgs.mkShell rec {
     python39
   ];
   RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
+  LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath buildInputs}";
 }
 
