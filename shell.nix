@@ -4,14 +4,13 @@ in
 pkgs.mkShell rec {
   name = "rustc";
   buildInputs = with pkgs; [
-    cargo
-    rustc
-    rustfmt
+    rustup
     pkg-config
     alsaLib
     libGL
     xorg.libX11
     xorg.libXi
+    python39
   ];
   RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
 }
