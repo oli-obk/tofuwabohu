@@ -1,4 +1,6 @@
-use macroquad::prelude::*;
+use std::sync::{Mutex, Arc};
+
+use macroquad::prelude::{*, coroutines::start_coroutine};
 use save::Saveable;
 
 mod datastructures;
@@ -30,6 +32,22 @@ struct Buttons {
     buttons: Vec<Button>,
 }
 
+impl Buttons {
+    fn add(
+        &mut self,
+        label: impl Into<String>,
+        action: impl FnOnce(&mut Game) + 'static,
+        action_condition: bool,
+        color: Color,
+    ) {
+        self.buttons.push(Button {
+            label: label.into(),
+            action: action_condition.then(|| Box::new(action) as _),
+            color,
+        });
+    }
+}
+
 struct Button {
     label: String,
     action: Option<Box<dyn FnOnce(&mut Game)>>,
@@ -38,23 +56,36 @@ struct Button {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut state = Game {
+    let state = Arc::new(Mutex::new(Game {
         chickens: Saveable::new(1_u64, "chickens"),
         chicks: Saveable::new(0_u64, "chicks"),
         nests: Saveable::new(0_u64, "nests"),
         breeding: Saveable::new(0_u64, "breeding"),
         eggs: Saveable::new(0_u64, "eggs"),
-    };
+    }));
     save::transaction_loop(|| {
         let xb = screen_width() * 0.1;
         let yb = screen_height() * 0.1;
 
         // Logic
 
+        let clonable_state = &state;
+        let mut state = state.lock().unwrap();
+        let mut state = &mut *state;
+
         if state.breeding > 1000 {
             let n = *state.breeding / 1000;
             state.breeding -= 1000 * n;
             state.chicks += n * 10;
+            let clonable_state = clonable_state.clone();
+            start_coroutine(async move {
+                for i in 0..100 {
+                    next_frame().await;
+                }
+                let mut state = clonable_state.lock().unwrap();
+                state.chicks -= n * 10;
+                state.chickens += n * 10;
+            });
             state.nests -= n;
         }
         state.breeding += *state.nests;
@@ -88,25 +119,29 @@ async fn main() {
         let mut buttons = Buttons::default();
 
         if state.eggs >= 10 {
-            buttons.buttons.push(Button {
-                label: "Build Nest".into(),
-                action: Some(Box::new(|state| {
+            buttons.add(
+                "Build Nest",
+                |state| {
                     if state.nests < *state.chickens {
                         state.eggs -= 10;
                         state.nests += 1;
                     }
-                })),
-                color: RED,
-            });
+                },
+                true,
+                RED,
+            );
         }
 
-        buttons.buttons.push(Button {
-            label: "Lay Egg".into(),
-            action: (*state.chickens > *state.nests).then(|| Box::new(|state: &mut Game| {
-                state.eggs += *state.chickens - *state.nests;
-            }) as _),
-            color: GREEN,
-        });
+        buttons.add(
+            "Lay Egg",
+            
+                |state| {
+                    state.eggs += *state.chickens - *state.nests;
+                }
+            ,
+            state.chickens > *state.nests,
+            GREEN,
+        );
 
         let button_height = yb * 1.5;
         let button_width = screen_width() - xb * 2.0;
