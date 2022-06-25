@@ -14,6 +14,7 @@ fn window_conf() -> Conf {
 
 struct Game {
     chickens: Saveable<u64>,
+    chicks: Saveable<u64>,
     nests: Saveable<u64>,
     eggs: Saveable<u64>,
     breeding: Saveable<u64>,
@@ -39,6 +40,7 @@ struct Button {
 async fn main() {
     let mut state = Game {
         chickens: Saveable::new(1_u64, "chickens"),
+        chicks: Saveable::new(0_u64, "chicks"),
         nests: Saveable::new(0_u64, "nests"),
         breeding: Saveable::new(0_u64, "breeding"),
         eggs: Saveable::new(0_u64, "eggs"),
@@ -52,7 +54,7 @@ async fn main() {
         if state.breeding > 1000 {
             let n = *state.breeding / 1000;
             state.breeding -= 1000 * n;
-            state.chickens += n * 10;
+            state.chicks += n * 10;
             state.nests -= n;
         }
         state.breeding += *state.nests;
@@ -63,6 +65,10 @@ async fn main() {
 
         let mut messages = Messages::default();
         messages.msgs.push(format!("Chickens: {}", *state.chickens));
+
+        if state.chicks > 0 {
+            messages.msgs.push(format!("Chicks: {}", *state.chicks));
+        }
 
         if state.eggs > 0 {
             messages.msgs.push(format!("Eggs: {}", *state.eggs));
@@ -81,7 +87,7 @@ async fn main() {
 
         let mut buttons = Buttons::default();
 
-        if state.eggs > 10 {
+        if state.eggs >= 10 {
             buttons.buttons.push(Button {
                 label: "Build Nest".into(),
                 action: Some(Box::new(|state| {
@@ -96,9 +102,9 @@ async fn main() {
 
         buttons.buttons.push(Button {
             label: "Lay Egg".into(),
-            action: Some(Box::new(|state| {
+            action: (*state.chickens > *state.nests).then(|| Box::new(|state: &mut Game| {
                 state.eggs += *state.chickens - *state.nests;
-            })),
+            }) as _),
             color: GREEN,
         });
 
