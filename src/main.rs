@@ -1,6 +1,9 @@
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc, Mutex};
 
-use macroquad::prelude::{*, coroutines::start_coroutine};
+use macroquad::{
+    prelude::{coroutines::start_coroutine, *},
+    rand::gen_range,
+};
 use save::Saveable;
 
 mod datastructures;
@@ -16,7 +19,9 @@ fn window_conf() -> Conf {
 
 struct Game {
     chickens: Saveable<u64>,
+    roosters: Saveable<u64>,
     chicks: Saveable<u64>,
+    runaway: Saveable<u64>,
     nests: Saveable<u64>,
     eggs: Saveable<u64>,
     breeding: Saveable<u64>,
@@ -59,6 +64,8 @@ async fn main() {
     let state = Arc::new(Mutex::new(Game {
         chickens: Saveable::new(1_u64, "chickens"),
         chicks: Saveable::new(0_u64, "chicks"),
+        runaway: Saveable::new(0_u64, "runaway"),
+        roosters: Saveable::new(0_u64, "roosters"),
         nests: Saveable::new(0_u64, "nests"),
         breeding: Saveable::new(0_u64, "breeding"),
         eggs: Saveable::new(0_u64, "eggs"),
@@ -79,12 +86,31 @@ async fn main() {
             state.chicks += n * 10;
             let clonable_state = clonable_state.clone();
             start_coroutine(async move {
+                let mut chicks = n * 10;
                 for i in 0..100 {
+                    let runaway = 100 * n / 7;
+                    let remove = if runaway > 100 {
+                        runaway / 100
+                    } else if i % runaway == 0 {
+                        1
+                    } else {
+                        0
+                    };
+
+                    if chicks >= remove {
+                        let mut state = clonable_state.lock().unwrap();
+                        state.runaway += remove;
+                        state.chicks -= remove;
+                        chicks -= remove;
+                    }
                     next_frame().await;
                 }
                 let mut state = clonable_state.lock().unwrap();
-                state.chicks -= n * 10;
-                state.chickens += n * 10;
+                state.chicks -= chicks;
+                let half = chicks / 2;
+                let rem = chicks % 2;
+                state.chickens += half;
+                state.roosters += half + rem;
             });
             state.nests -= n;
         }
@@ -134,11 +160,9 @@ async fn main() {
 
         buttons.add(
             "Lay Egg",
-            
-                |state| {
-                    state.eggs += *state.chickens - *state.nests;
-                }
-            ,
+            |state| {
+                state.eggs += *state.chickens - *state.nests;
+            },
             state.chickens > *state.nests,
             GREEN,
         );
