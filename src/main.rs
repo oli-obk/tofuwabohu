@@ -115,12 +115,14 @@ async fn main() {
 
         // Drawing
         clear_background(BLACK);
-        if is_key_down(KeyCode::Space) {
-            draw_text(&format!("{} fps", get_fps()), 0.0, 40.0, 40.0, DARKGRAY);
-        }
         let thickness = (xb + yb) / 10.0;
 
         let mut messages = Messages::default();
+
+        if is_key_down(KeyCode::Space) {
+            messages.msgs.push(format!("{} fps", get_fps()));
+        }
+
         messages.msgs.push(format!("{} chickens", *state.chickens));
 
         if state.runaway > 0 {
