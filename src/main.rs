@@ -1,6 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use macroquad::prelude::{coroutines::start_coroutine, *};
+use macroquad::prelude::{
+    coroutines::{start_coroutine, Coroutine},
+    *,
+};
 use save::Saveable;
 
 mod datastructures;
@@ -17,6 +20,7 @@ fn window_conf() -> Conf {
 struct State {
     chickens: Saveable<u64>,
     roosters: Saveable<u64>,
+    nest_builders: Saveable<u64>,
     chicks: Saveable<u64>,
     runaway: Saveable<u64>,
     nests: Saveable<u64>,
@@ -26,6 +30,7 @@ struct State {
 
 struct Game {
     state: Arc<Mutex<State>>,
+    nest_building: Option<Coroutine>,
 }
 
 impl Game {
@@ -59,14 +64,41 @@ impl Game {
             state.roosters += half + rem;
         });
     }
-    fn cleanup(&self) {
-        let mut state = self.state.lock().unwrap();
-        let state = &mut state;
-        let c = *state.chicks % 10;
-        state.chicks -= c;
-        state.runaway += c;
-        if state.chicks > 10 {
-            self.chicks_growing_up(*state.chicks / 10);
+    fn cleanup(&mut self) {
+        let mut nest_building = false;
+        {
+            let mut state = self.state.lock().unwrap();
+            let state = &mut state;
+            let c = *state.chicks % 10;
+            state.chicks -= c;
+            state.runaway += c;
+            if state.chicks >= 10 {
+                self.chicks_growing_up(*state.chicks / 10);
+            }
+            nest_building = state.nest_builders > 0;
+        }
+        if nest_building {
+            self.nest_building();
+        }
+    }
+    fn nest_building(&mut self) {
+        if self.nest_building.is_none() {
+            let state = self.state.clone();
+            self.nest_building = Some(start_coroutine(async move {
+                loop {
+                    // wait around 10s per rooster
+                    let roosters = *state.lock().unwrap().nest_builders;
+                    for _ in 0..(600/roosters) {
+                        next_frame().await;
+                    }
+                    {
+                        let mut state = state.lock().unwrap();
+                        let state = &mut state;
+                        state.nests += roosters.checked_sub(600).unwrap_or(1);
+                    }
+                    next_frame().await;
+                }
+            }))
         }
     }
 }
@@ -110,15 +142,18 @@ async fn main() {
         chicks: Saveable::new(0_u64, "chicks"),
         runaway: Saveable::new(0_u64, "runaway"),
         roosters: Saveable::new(0_u64, "roosters"),
+        nest_builders: Saveable::new(0_u64, "nest_builders"),
         nests: Saveable::new(0_u64, "nests"),
         breeding: Saveable::new(0_u64, "breeding"),
         eggs: Saveable::new(0_u64, "eggs"),
     }));
-    let game = Game {
+    let mut game = Game {
         state: state.clone(),
+        nest_building: None,
     };
-    save::transaction_step(|| async {
+    save::transaction_step(|| {
         game.cleanup();
+        async {}
     })
     .await;
 
@@ -150,7 +185,9 @@ async fn main() {
         if is_key_down(KeyCode::Space) {
             fps.rotate_right(1);
             fps[0] = get_fps();
-            messages.msgs.push(format!("{} fps", fps.iter().sum::<i32>() / 60));
+            messages
+                .msgs
+                .push(format!("{} fps", fps.iter().sum::<i32>() / 60));
         }
 
         messages.msgs.push(format!("{} chickens", *state.chickens));
@@ -171,6 +208,10 @@ async fn main() {
 
         if state.eggs > 0 {
             messages.msgs.push(format!("{} eggs", *state.eggs));
+        }
+
+        if state.nest_builders > 0 {
+            messages.msgs.push(format!("{} nest_builders", *state.nest_builders));
         }
 
         if state.nests > 0 {
@@ -198,16 +239,29 @@ async fn main() {
 
         let mut buttons = Buttons::default();
 
-        if state.eggs >= 10 || state.nests > 0 {
+        if state.eggs >= 10 || state.chickens > 1 {
             buttons.add(
                 "Build Nest",
                 |state| {
                     state.eggs -= 10;
                     state.nests += 1;
                 },
-                state.nests < *state.chickens,
+                state.nests < *state.chickens && state.eggs >= 10,
                 RED,
             );
+        }
+
+        if state.nest_builders > 1 || state.nests > 100 || state.chickens > 5000 {
+            buttons.add(
+                "Employ rooster for nest building",
+                |state| {
+                    state.roosters -= 1;
+                    state.nest_builders += 1;
+                },
+                state.roosters > 0,
+                YELLOW,
+            );
+            game.nest_building();
         }
 
         buttons.add(
