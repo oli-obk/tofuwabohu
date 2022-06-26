@@ -1,9 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use macroquad::{
-    prelude::{coroutines::start_coroutine, *},
-    rand::gen_range,
-};
+use macroquad::prelude::{coroutines::start_coroutine, *};
 use save::Saveable;
 
 mod datastructures;
