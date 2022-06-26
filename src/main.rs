@@ -115,15 +115,16 @@ async fn main() {
 
         // Drawing
         clear_background(BLACK);
+        if is_key_down(KeyCode::Space) {
+            draw_text(&format!("{} fps", get_fps()), 0.0, 40.0, 40.0, DARKGRAY);
+        }
         let thickness = (xb + yb) / 10.0;
 
         let mut messages = Messages::default();
         messages.msgs.push(format!("{} chickens", *state.chickens));
 
         if state.runaway > 0 {
-            messages
-                .msgs
-                .push(format!("{} ran away", *state.runaway));
+            messages.msgs.push(format!("{} ran away", *state.runaway));
         }
 
         if state.roosters > 0 {
@@ -148,9 +149,10 @@ async fn main() {
                     .msgs
                     .push(format!("Breeding: {} nests/s", *state.nests * 60 / 1000));
             } else {
-                messages
-                    .msgs
-                    .push(format!("Breeding: {:>2}% completed", *state.breeding * 100 / 1000));
+                messages.msgs.push(format!(
+                    "Breeding: {:>2}% completed",
+                    *state.breeding * 100 / 1000
+                ));
             }
         }
 
