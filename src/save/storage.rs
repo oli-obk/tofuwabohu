@@ -82,6 +82,10 @@ pub async fn transaction_loop<F: Future<Output = ()>>(mut f: impl FnMut() -> F) 
         {
             use quad_storage_sys::*;
             let oddstr = format!("{}/", (!odd) as u8);
+            if len() > 100000 {
+                // hotfix for bugs that accidentally produce infinite entries
+                clear();
+            }
             for i in 0..len() {
                 let key = key(i).unwrap();
                 if key.starts_with(&oddstr) {
