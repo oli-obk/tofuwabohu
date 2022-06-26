@@ -27,11 +27,13 @@ struct State {
     eggs: Saveable<u64>,
     breeding: Saveable<u64>,
     corn: Saveable<u64>,
+    corn_fetchers: Saveable<u64>,
 }
 
 struct Game {
     state: Arc<Mutex<State>>,
     nest_building: Option<Coroutine>,
+    corn_fetching: Option<Coroutine>,
 }
 
 impl Game {
@@ -112,6 +114,30 @@ impl Game {
             }))
         }
     }
+    fn rooster_fetch_corn(&mut self) {
+        if self.corn_fetching.is_none() {
+            let state = self.state.clone();
+            self.corn_fetching = Some(start_coroutine(async move {
+                loop {
+                    // wait around 10s per 1000 roosters
+                    let mut ticks = 600_u64;
+                    while ticks > 0 {
+                        ticks = ticks.saturating_sub(*state.lock().unwrap().corn_fetchers / 1000);
+                        next_frame().await;
+                    }
+                    {
+                        let mut state = state.lock().unwrap();
+                        let state = &mut state;
+                        let fetched = state.corn_fetchers.checked_sub(600).unwrap_or(1);
+                        state.corn += fetched * 500; // 400-500 corn per Kolben (https://faq-ans.com/de/Q%26A/page=5931035eafd04c6206fc17510a3af9b8#s0)
+                        state.roosters += fetched;
+                        state.corn_fetchers -= fetched;
+                    }
+                    next_frame().await;
+                }
+            }))
+        }
+    }
 }
 
 #[derive(Default)]
@@ -158,10 +184,12 @@ async fn main() {
         breeding: Saveable::new(0_u64, "breeding"),
         eggs: Saveable::new(0_u64, "eggs"),
         corn: Saveable::new(0_u64, "corn"),
+        corn_fetchers: Saveable::new(0_u64, "corn_fetchers"),
     }));
     let mut game = Game {
         state: state.clone(),
         nest_building: None,
+        corn_fetching: None,
     };
     save::transaction_step(|| {
         game.cleanup();
@@ -222,8 +250,14 @@ async fn main() {
             messages.msgs.push(format!("{} eggs", *state.eggs));
         }
 
+        if state.corn > 0 {
+            messages.msgs.push(format!("{} corn", *state.corn));
+        }
+
         if state.nest_builders > 0 {
-            messages.msgs.push(format!("{} nest_builders", *state.nest_builders));
+            messages
+                .msgs
+                .push(format!("{} nest_builders", *state.nest_builders));
         }
 
         if state.nests > 0 {
@@ -251,7 +285,7 @@ async fn main() {
 
         let mut buttons = Buttons::default();
 
-        if state.eggs >= 10 || state.chickens > 1 {
+        if state.nest_builders < 100 && (state.eggs >= 10 || state.chickens > 1) {
             buttons.add(
                 "Build Nest",
                 |state| {
@@ -264,6 +298,11 @@ async fn main() {
         }
 
         if state.nest_builders > 1 || state.nests > 100 || state.chickens > 5000 {
+            let n = match *state.nest_builders {
+                0..=99 => (1, "rooster"),
+                100..=1000 => (10, "roosters"),
+                _ => (1000, "roosters"),
+            };
             buttons.add(
                 "Employ rooster for nest building",
                 |state| {
@@ -276,14 +315,33 @@ async fn main() {
             game.nest_building();
         }
 
-        buttons.add(
-            "Lay Egg",
-            |state| {
-                state.eggs += *state.chickens - *state.nests;
-            },
-            state.chickens > *state.nests,
-            GREEN,
-        );
+        if state.corn > 1
+            || state.nest_builders > 100
+            || state.corn_fetchers > 0
+            || state.chickens > 10000
+        {
+            buttons.add(
+                "Send 1k roosters to fetch corn",
+                |state| {
+                    state.roosters -= 1000;
+                    state.corn_fetchers += 1000;
+                },
+                state.roosters >= 1000,
+                YELLOW,
+            );
+            game.rooster_fetch_corn();
+        }
+
+        if state.eggs < 1000 {
+            buttons.add(
+                "Lay Egg",
+                |state| {
+                    state.eggs += *state.chickens - *state.nests;
+                },
+                state.chickens > *state.nests,
+                GREEN,
+            );
+        }
 
         let button_height = yb * 1.5;
         let button_width = screen_width() - xb * 2.0;
