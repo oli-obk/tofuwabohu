@@ -120,6 +120,18 @@ async fn main() {
         let mut messages = Messages::default();
         messages.msgs.push(format!("Chickens: {}", *state.chickens));
 
+        if state.runaway > 0 {
+            messages
+                .msgs
+                .push(format!("Chicks that ran away: {}", *state.runaway));
+        }
+
+        if state.roosters > 0 {
+            messages
+                .msgs
+                .push(format!("Useless Roosters: {}", *state.roosters));
+        }
+
         if state.chicks > 0 {
             messages.msgs.push(format!("Chicks: {}", *state.chicks));
         }
@@ -130,9 +142,16 @@ async fn main() {
 
         if state.nests > 0 {
             messages.msgs.push(format!("Nests: {}", *state.nests));
-            messages
-                .msgs
-                .push(format!("Breeding: {}%", *state.breeding * 100 / 1000));
+            // start displaying per second speed at 2/s
+            if *state.nests * 120 > 1000 {
+                messages
+                    .msgs
+                    .push(format!("Breeding: {} nests/s", *state.nests * 60 / 1000));
+            } else {
+                messages
+                    .msgs
+                    .push(format!("Breeding: {}%", *state.breeding * 100 / 1000));
+            }
         }
 
         for (i, msg) in messages.msgs.iter().enumerate() {
@@ -145,12 +164,10 @@ async fn main() {
             buttons.add(
                 "Build Nest",
                 |state| {
-                    if state.nests < *state.chickens {
-                        state.eggs -= 10;
-                        state.nests += 1;
-                    }
+                    state.eggs -= 10;
+                    state.nests += 1;
                 },
-                true,
+                state.nests < *state.chickens,
                 RED,
             );
         }
