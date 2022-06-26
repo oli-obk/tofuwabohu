@@ -122,6 +122,8 @@ async fn main() {
     })
     .await;
 
+    let mut fps = [60; 60];
+
     save::transaction_loop(|| {
         let xb = screen_width() * 0.1;
         let yb = screen_height() * 0.1;
@@ -146,7 +148,9 @@ async fn main() {
         let mut messages = Messages::default();
 
         if is_key_down(KeyCode::Space) {
-            messages.msgs.push(format!("{} fps", get_fps()));
+            fps.rotate_right(1);
+            fps[0] = get_fps();
+            messages.msgs.push(format!("{} fps", fps.iter().sum::<i32>() / 60));
         }
 
         messages.msgs.push(format!("{} chickens", *state.chickens));
