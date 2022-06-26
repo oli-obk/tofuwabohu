@@ -118,30 +118,30 @@ async fn main() {
         let thickness = (xb + yb) / 10.0;
 
         let mut messages = Messages::default();
-        messages.msgs.push(format!("Chickens: {}", *state.chickens));
+        messages.msgs.push(format!("{} chickens", *state.chickens));
 
         if state.runaway > 0 {
             messages
                 .msgs
-                .push(format!("Chicks that ran away: {}", *state.runaway));
+                .push(format!("{} ran away", *state.runaway));
         }
 
         if state.roosters > 0 {
             messages
                 .msgs
-                .push(format!("Useless Roosters: {}", *state.roosters));
+                .push(format!("{} useless roosters", *state.roosters));
         }
 
         if state.chicks > 0 {
-            messages.msgs.push(format!("Chicks: {}", *state.chicks));
+            messages.msgs.push(format!("{} chicks", *state.chicks));
         }
 
         if state.eggs > 0 {
-            messages.msgs.push(format!("Eggs: {}", *state.eggs));
+            messages.msgs.push(format!("{} eggs", *state.eggs));
         }
 
         if state.nests > 0 {
-            messages.msgs.push(format!("Nests: {}", *state.nests));
+            messages.msgs.push(format!("{} nests", *state.nests));
             // start displaying per second speed at 2/s
             if *state.nests * 120 > 1000 {
                 messages
@@ -150,7 +150,7 @@ async fn main() {
             } else {
                 messages
                     .msgs
-                    .push(format!("Breeding: {}%", *state.breeding * 100 / 1000));
+                    .push(format!("Breeding: {:>2}% completed", *state.breeding * 100 / 1000));
             }
         }
 
