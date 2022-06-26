@@ -26,6 +26,7 @@ struct State {
     nests: Saveable<u64>,
     eggs: Saveable<u64>,
     breeding: Saveable<u64>,
+    corn: Saveable<u64>,
 }
 
 struct Game {
@@ -65,7 +66,7 @@ impl Game {
         });
     }
     fn cleanup(&mut self) {
-        let mut nest_building = false;
+        let nest_building;
         {
             let mut state = self.state.lock().unwrap();
             let state = &mut state;
@@ -87,14 +88,24 @@ impl Game {
             self.nest_building = Some(start_coroutine(async move {
                 loop {
                     // wait around 10s per rooster
-                    let roosters = *state.lock().unwrap().nest_builders;
-                    for _ in 0..(600/roosters) {
+                    let mut ticks = 600_u64;
+                    while ticks > 0 {
+                        ticks = ticks.saturating_sub(*state.lock().unwrap().nest_builders);
                         next_frame().await;
                     }
                     {
                         let mut state = state.lock().unwrap();
                         let state = &mut state;
-                        state.nests += roosters.checked_sub(600).unwrap_or(1);
+                        let nb = state.nest_builders.checked_sub(600).unwrap_or(1);
+                        let corn = *state.corn;
+                        state.nests += nb;
+                        if corn > nb {
+                            state.corn -= nb;
+                        } else {
+                            state.roosters += nb - corn;
+                            state.nest_builders -= nb - corn;
+                            state.corn.set(0_u64);
+                        }
                     }
                     next_frame().await;
                 }
@@ -146,6 +157,7 @@ async fn main() {
         nests: Saveable::new(0_u64, "nests"),
         breeding: Saveable::new(0_u64, "breeding"),
         eggs: Saveable::new(0_u64, "eggs"),
+        corn: Saveable::new(0_u64, "corn"),
     }));
     let mut game = Game {
         state: state.clone(),
