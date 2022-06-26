@@ -8,7 +8,7 @@ use std::{
 use hex2d::Coordinate;
 
 mod storage;
-pub use storage::transaction_loop;
+pub use storage::{transaction_loop, transaction_step};
 
 fn save(key: impl ToString, value: impl ToString) {
     storage::set(&key.to_string(), &value.to_string())

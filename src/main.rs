@@ -14,7 +14,7 @@ fn window_conf() -> Conf {
     }
 }
 
-struct Game {
+struct State {
     chickens: Saveable<u64>,
     roosters: Saveable<u64>,
     chicks: Saveable<u64>,
@@ -22,6 +22,53 @@ struct Game {
     nests: Saveable<u64>,
     eggs: Saveable<u64>,
     breeding: Saveable<u64>,
+}
+
+struct Game {
+    state: Arc<Mutex<State>>,
+}
+
+impl Game {
+    fn chicks_growing_up(&self, n: u64) {
+        let state = self.state.clone();
+        start_coroutine(async move {
+            let mut chicks = n * 10;
+            for i in 0..100 {
+                let runaway = 100 * n / 7;
+                let remove = if runaway > 100 {
+                    runaway / 100
+                } else if i % runaway == 0 {
+                    1
+                } else {
+                    0
+                };
+
+                if chicks >= remove {
+                    let mut state = state.lock().unwrap();
+                    state.runaway += remove;
+                    state.chicks -= remove;
+                    chicks -= remove;
+                }
+                next_frame().await;
+            }
+            let mut state = state.lock().unwrap();
+            state.chicks -= chicks;
+            let half = chicks / 2;
+            let rem = chicks % 2;
+            state.chickens += half;
+            state.roosters += half + rem;
+        });
+    }
+    fn cleanup(&self) {
+        let mut state = self.state.lock().unwrap();
+        let state = &mut state;
+        let c = *state.chicks % 10;
+        state.chicks -= c;
+        state.runaway += c;
+        if state.chicks > 10 {
+            self.chicks_growing_up(*state.chicks / 10);
+        }
+    }
 }
 
 #[derive(Default)]
@@ -38,7 +85,7 @@ impl Buttons {
     fn add(
         &mut self,
         label: impl Into<String>,
-        action: impl FnOnce(&mut Game) + 'static,
+        action: impl FnOnce(&mut State) + 'static,
         action_condition: bool,
         color: Color,
     ) {
@@ -52,13 +99,13 @@ impl Buttons {
 
 struct Button {
     label: String,
-    action: Option<Box<dyn FnOnce(&mut Game)>>,
+    action: Option<Box<dyn FnOnce(&mut State)>>,
     color: Color,
 }
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let state = Arc::new(Mutex::new(Game {
+    let state = Arc::new(Mutex::new(State {
         chickens: Saveable::new(1_u64, "chickens"),
         chicks: Saveable::new(0_u64, "chicks"),
         runaway: Saveable::new(0_u64, "runaway"),
@@ -67,13 +114,19 @@ async fn main() {
         breeding: Saveable::new(0_u64, "breeding"),
         eggs: Saveable::new(0_u64, "eggs"),
     }));
+    let game = Game {
+        state: state.clone(),
+    };
+    save::transaction_step(|| async {
+        game.cleanup();
+    })
+    .await;
+
     save::transaction_loop(|| {
         let xb = screen_width() * 0.1;
         let yb = screen_height() * 0.1;
 
         // Logic
-
-        let clonable_state = &state;
         let mut state = state.lock().unwrap();
         let mut state = &mut *state;
 
@@ -81,34 +134,7 @@ async fn main() {
             let n = *state.breeding / 1000;
             state.breeding -= 1000 * n;
             state.chicks += n * 10;
-            let clonable_state = clonable_state.clone();
-            start_coroutine(async move {
-                let mut chicks = n * 10;
-                for i in 0..100 {
-                    let runaway = 100 * n / 7;
-                    let remove = if runaway > 100 {
-                        runaway / 100
-                    } else if i % runaway == 0 {
-                        1
-                    } else {
-                        0
-                    };
-
-                    if chicks >= remove {
-                        let mut state = clonable_state.lock().unwrap();
-                        state.runaway += remove;
-                        state.chicks -= remove;
-                        chicks -= remove;
-                    }
-                    next_frame().await;
-                }
-                let mut state = clonable_state.lock().unwrap();
-                state.chicks -= chicks;
-                let half = chicks / 2;
-                let rem = chicks % 2;
-                state.chickens += half;
-                state.roosters += half + rem;
-            });
+            game.chicks_growing_up(n);
             state.nests -= n;
         }
         state.breeding += *state.nests;
@@ -146,7 +172,7 @@ async fn main() {
         if state.nests > 0 {
             messages.msgs.push(format!("{} nests", *state.nests));
             // start displaying per second speed at 2/s
-            if *state.nests * 120 > 1000 {
+            if *state.nests * 30 > 1000 {
                 messages
                     .msgs
                     .push(format!("Breeding: {} nests/s", *state.nests * 60 / 1000));

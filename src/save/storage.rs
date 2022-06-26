@@ -66,16 +66,34 @@ fn get_inner(key: &str) -> Option<String> {
 static ODD: AtomicBool = AtomicBool::new(false);
 static TRANSACTION: AtomicBool = AtomicBool::new(false);
 
-pub async fn transaction_loop<F: Future<Output = ()>>(mut f: impl FnMut() -> F) {
-    assert_eq!(
-        TRANSACTION.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed),
-        Ok(false)
-    );
-    // Figure out the last successfull transaction.
-    let mut odd = get_inner("odd").map(|s| s.parse().unwrap()).unwrap_or(true);
-    loop {
+struct Transactor {
+    odd: bool,
+}
+
+impl Drop for Transactor {
+    fn drop(&mut self) {
+        assert_eq!(
+            TRANSACTION.compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed),
+            Ok(true)
+        );
+    }
+}
+
+impl Transactor {
+    fn new() -> Self {
+        assert_eq!(
+            TRANSACTION.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed),
+            Ok(false)
+        );
+        // Figure out the last successfull transaction.
+        Self {
+            odd: get_inner("odd").map(|s| s.parse().unwrap()).unwrap_or(true),
+        }
+    }
+    async fn step<F: Future<Output = ()>>(&mut self, mut f: impl FnMut() -> F) {
         // Use the next frame.
-        odd = !odd;
+        self.odd = !self.odd;
+
         // Preserve previous state.
 
         #[cfg(target_arch = "wasm32")]
@@ -97,15 +115,27 @@ pub async fn transaction_loop<F: Future<Output = ()>>(mut f: impl FnMut() -> F) 
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let dest = path(&(odd as u8).to_string());
+            let dest = path(&(self.odd as u8).to_string());
             let _ = std::fs::remove_dir_all(&dest);
-            let _ = copy_dir::copy_dir(path(&((!odd) as u8).to_string()), dest);
+            let _ = copy_dir::copy_dir(path(&((!self.odd) as u8).to_string()), dest);
         }
         // Let all the regular storage ops know what prefix to use.
-        ODD.store(odd, Ordering::Relaxed);
+        ODD.store(self.odd, Ordering::Relaxed);
+
         // Perform transaction
         f().await;
         // Transaction successfully done
-        set_inner("odd", &odd.to_string());
+        set_inner("odd", &self.odd.to_string());
     }
+}
+
+pub async fn transaction_loop<F: Future<Output = ()>>(mut f: impl FnMut() -> F) {
+    let mut trans = Transactor::new();
+    loop {
+        trans.step(&mut f).await;
+    }
+}
+
+pub async fn transaction_step<F: Future<Output = ()>>(f: impl FnMut() -> F) {
+    Transactor::new().step(f).await
 }
