@@ -198,7 +198,7 @@ async fn main() {
 
         let mut buttons = Buttons::default();
 
-        if state.eggs >= 10 {
+        if state.eggs >= 10 || state.nests > 0 {
             buttons.add(
                 "Build Nest",
                 |state| {
