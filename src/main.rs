@@ -154,8 +154,12 @@ async fn main() {
             }
         }
 
+        let dims = measure_text(&messages.msgs[0], None, yb as _, 1.0);
+        let scale_y = screen_height() / 4.0 / messages.msgs.len() as f32 / dims.height / 0.9;
+        let scale = if scale_y < 1.0 { scale_y * yb } else { yb };
+
         for (i, msg) in messages.msgs.iter().enumerate() {
-            draw_text(msg, xb, yb * (i + 1) as f32 * 0.9, yb, DARKGRAY);
+            draw_text(msg, xb, (i + 1) as f32 * 0.9 * scale, scale, DARKGRAY);
         }
 
         let mut buttons = Buttons::default();
