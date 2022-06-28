@@ -11,6 +11,9 @@ hex2d = {version = "1.1.0", default-features = false}
 # FIXME: remove audio feature once macroquad compiles without it
 macroquad = {version = "0.3", default-features = false, features = ["audio"]}
 
+[patch.crates-io]
+miniquad = { git = "https://github.com/not-fl3/miniquad", rev = "108854ddf14720ecd170cd19afcfbe69cbf62278" }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 quad-storage-sys = "0.1.0"
 

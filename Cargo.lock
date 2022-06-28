@@ -270,8 +270,7 @@ checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
 [[package]]
 name = "miniquad"
 version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d804e22ac23891248463e3fe83ac2982e87b69b641c55dca1f38df20f3f15894"
+source = "git+https://github.com/not-fl3/miniquad?rev=108854ddf14720ecd170cd19afcfbe69cbf62278#108854ddf14720ecd170cd19afcfbe69cbf62278"
 dependencies = [
  "libc",
  "ndk-sys",
